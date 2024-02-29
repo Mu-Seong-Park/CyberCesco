@@ -2,73 +2,126 @@ import os
 import numpy as np
 import tensorflow as tf
 from keras import Sequential
+from keras.src import layers
 from keras.src.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from keras.src.preprocessing.image import ImageDataGenerator
-
+from skimage.transform import resize
+from sklearn.model_selection import train_test_split
+import matplotlib as plt
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 # 데이터 경로 설정
-data_dir = './train'  # 이미지 데이터 폴더 경로
-img_width, img_height = 150, 150  # 이미지 크기
-input_shape = (img_width, img_height, 3)
-epochs = 20
-batch_size = 32
+data_dir = '.\\train'  # 이미지 데이터 폴더 경로
+#
+# # file 이름을 label과 id로 나누기.
+# full_name = os.listdir(data_dir)
+# labels = [each.split('.')[0] for each in full_name]
+# file_id = [each.split('.')[1] for each in full_name]
+# print(set(labels), len(file_id))
 
-# 데이터 생성기 설정
-datagen = ImageDataGenerator(
-    rescale=1. / 255,  # 픽셀 값을 0과 1 사이로 조정
-    shear_range=0.2,
-    zoom_range=0.2,
+imageGenerator = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=20,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    brightness_range=[0.2, 1.3],
     horizontal_flip=True,
-    validation_split=0.2)  # 20%를 검증 데이터로 사용
+    validation_split=.2
+)
 
-# 데이터 로드 및 분할
-train_generator = datagen.flow_from_directory(
-    data_dir,
-    target_size=(img_width, img_height),
-    batch_size=batch_size,
-    class_mode='binary',
-    subset='training')  # 학습용 데이터
+trainGen = imageGenerator.flow_from_directory(
+    os.path.join(data_dir, 'train_set'),
+    target_size=(64, 64),
+    subset='training'
+)
 
-validation_generator = datagen.flow_from_directory(
-    data_dir,
-    target_size=(img_width, img_height),
-    batch_size=batch_size,
-    class_mode='binary',
-    subset='validation')  # 검증용 데이터
+validationGen = imageGenerator.flow_from_directory(
+    os.path.join(data_dir, 'train_set'),
+    target_size=(64, 64),
+    subset='validation'
+)
 
-# CNN 모델 생성
 model = Sequential()
-model.add(Conv2D(32, (3, 3), input_shape=input_shape, activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
 
-model.add(Conv2D(32, (3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(layers.InputLayer(input_shape=(64, 64, 3)))
+model.add(layers.Conv2D(16, (3, 3), (1, 1), 'same', activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Dropout(rate=0.3))
 
-model.add(Conv2D(64, (3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(layers.Conv2D(32, (3, 3), (1, 1), 'same', activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Dropout(rate=0.3))
 
-model.add(Flatten())
-model.add(Dense(64, activation='relu'))
-model.add(Dense(1, activation='sigmoid'))
+model.add(layers.Conv2D(64, (3, 3), (1, 1), 'same', activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Dropout(rate=0.3))
 
-model.compile(loss='binary_crossentropy',
-              optimizer='adam',
-              metrics=['accuracy'])
+model.add(layers.Flatten())
+model.add(layers.Dense(512, activation='relu'))
+model.add(layers.Dense(256, activation='relu'))
+model.add(layers.Dense(2, activation='sigmoid'))
 
+model.summary()
 
-# 모델 학습
-model.fit(
-    train_generator,
-    steps_per_epoch=train_generator.samples // batch_size,
+model.compile(
+    optimizer='adam',
+    loss='binary_crossentropy',
+    metrics=['acc'],
+)
+
+epochs = 50
+history = model.fit(
+    trainGen,
     epochs=epochs,
-    validation_data=validation_generator,
-    validation_steps=validation_generator.samples // batch_size)
+    validation_data=validationGen,
+)
+
+history.history.keys()
+
+history_dict = history.history
+
+loss = history_dict['loss']
+val_loss = history_dict['val_loss']
+
+epochs = range(1, len(loss)+1)
+fig = plt.figure(figsize=(12, 6))
+
+ax1 = fig.add_subplot(1, 2, 1)
+ax1.plot(epochs, loss, color='blue', label='train_loss')
+ax1.plot(epochs, val_loss, color='red', label='val_loss')
+ax1.set_title('Train ans Validation loss')
+ax1.set_xlabel('Epochs')
+ax1.set_ylabel('loss')
+ax1.grid()
+ax1.legend()
+
+accuracy = history_dict['acc']
+val_accuracy = history_dict['val_acc']
+
+ax2 = fig.add_subplot(1, 2, 2)
+ax2.plot(epochs, accuracy, color='blue', label='train_accuracy')
+ax2.plot(epochs, val_accuracy, color='red', label='val_accuracy')
+ax2.set_title('Train ans Validation Accuracy')
+ax2.set_xlabel('Epochs')
+ax2.set_ylabel('Accuracy')
+ax2.grid()
+ax2.legend()
+
+plt.show()
+
+testGenerator = ImageDataGenerator(
+    rescale=1./255
+)
+
+testGen = imageGenerator.flow_from_directory(
+    os.path.join(data_dir, 'test_set'),
+    target_size=(64, 64),
+)
+
+model.save('cat_dog_model.h5')
 
 
-# 모델 저장
-model.save('cat_dog_classifier.h5')
 
 # import tensorflow as tf
 # from tensorflow import keras
