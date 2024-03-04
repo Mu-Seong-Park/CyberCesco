@@ -7,6 +7,7 @@ import requests
 import multiprocessing
 import time
 
+from keras.src.saving.saving_lib import load_model
 
 app = Flask(__name__)
 socketio = SocketIO(app, namespace='/socket.io', cors_allowed_origins="*")
@@ -15,7 +16,10 @@ socketio = SocketIO(app, namespace='/socket.io', cors_allowed_origins="*")
 app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB
 
 
-async def process_video(byte_data):
+# 개 고양이 학습 모델 불러오기.
+model = load_model('../ai/finger_classification_model.h5')
+
+def process_video(byte_data):
     # 가상의 파일 객체 생성
     video_file = BytesIO(byte_data)
 
@@ -37,11 +41,28 @@ async def process_video(byte_data):
 
     return frames
 
+def classify_frames(frames):
+    classifications = []
+    for idx, frame in enumerate(frames):
+        # 이미지 전처리
+        resized_frame = cv2.resize(frame, (224, 224))
+        img_array = np.expand_dims(resized_frame, axis=0)
+
+        # 이미지 분류
+        predictions = model.predict(img_array)
+        predicted_class = np.argmax(predictions)
+
+        # 분류 결과 저장
+        classifications.append({"frame_index": idx, "class": "cat" if predicted_class == 0 else "dog"})
+
+    return classifications
+
 
 def temp_data_check(byte_data,auth):
     print("비동기 작동중......")
+
     #가상의 파일 객체 생성.
-    video_file = BytesIO(byte_data)
+    video_frames = process_video(byte_data)
 
     # spring으로 보내줄 JSON 더미 데이터, result_key 부분은 나중에 분 초나 몇번째 프레임인지
     # 이런 것으로 판별하거나, 이미지 등으로 대체할 예정.
