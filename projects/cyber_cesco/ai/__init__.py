@@ -7,7 +7,7 @@ from keras.src.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from keras.src.preprocessing.image import ImageDataGenerator
 from skimage.transform import resize
 from sklearn.model_selection import train_test_split
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
