@@ -5,19 +5,20 @@ import numpy as np
 import cv2
 import requests
 import multiprocessing
+import json
 import time
 
-from keras.src.saving.saving_lib import load_model
+from keras.models import load_model
 
 app = Flask(__name__)
 socketio = SocketIO(app, namespace='/socket.io', cors_allowed_origins="*")
 # CORS(app)
 
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB
+app.config['MAX_CONTENT_LENGTH'] = 600 * 1024 * 1024  # 600MB
 
 
 # 개 고양이 학습 모델 불러오기.
-model = load_model('../ai/finger_classification_model.h5')
+model = load_model(r'C:/Users/qkdkr/Desktop/study/CyberCesco/projects/cyber_cesco/pybo/cat_dog_model.h5')
 
 def process_video(byte_data):
     # 가상의 파일 객체 생성
@@ -53,20 +54,25 @@ def classify_frames(frames):
         predicted_class = np.argmax(predictions)
 
         # 분류 결과 저장
-        classifications.append({"frame_index": idx, "class": "cat" if predicted_class == 0 else "dog"})
+        if predicted_class == 0:
+            classifications.append({"frame_index": idx, "class": "cat"})
+        elif predicted_class == 1:
+            classifications.append({"frame_index": idx, "class": "dog"})
+        else:
+            continue
 
     return classifications
 
 
-def temp_data_check(byte_data,auth):
+def temp_data_check(byte_data, auth):
     print("비동기 작동중......")
 
     #가상의 파일 객체 생성.
     video_frames = process_video(byte_data)
-
+    classifications = classify_frames(video_frames)
     # spring으로 보내줄 JSON 더미 데이터, result_key 부분은 나중에 분 초나 몇번째 프레임인지
     # 이런 것으로 판별하거나, 이미지 등으로 대체할 예정.
-    response = {"Auth": auth, "result_key": ["123"]}
+    response = {"Auth": auth, "classifications": classifications}
 
 
     i = 10000
@@ -78,15 +84,14 @@ def temp_data_check(byte_data,auth):
             i = i - 1
     print("전송 시작.")
 
-    send_classification_results(auth)
+    send_classification_results(response)
 
 
-def send_classification_results(classified_results):
+def send_classification_results(json_data):
     print("전송 메서드 진입.......")
     # 다른 서버의 '/event' 엔드포인트로 분류 결과를 전송
-    results = {'results': "complete", 'auth': classified_results}
     url = 'http://localhost:8080/videoResult'
-    response = requests.post(url, json=results)
+    response = requests.post(url, json=json_data)
     if response.status_code == 200:
         print('Classification results successfully sent to the event endpoint')
     else:
