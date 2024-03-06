@@ -14,33 +14,45 @@ app = Flask(__name__)
 socketio = SocketIO(app, namespace='/socket.io', cors_allowed_origins="*")
 # CORS(app)
 
-app.config['MAX_CONTENT_LENGTH'] = 600 * 1024 * 1024  # 600MB
-
+app.config['MAX_CONTENT_LENGTH'] = 800 * 1024 * 1024  # 800MB
 
 # 개 고양이 학습 모델 불러오기.
-model = load_model(r'C:/Users/qkdkr/Desktop/study/CyberCesco/projects/cyber_cesco/pybo/cat_dog_model.h5')
+# model = load_model(r'C:/Users/qkdkr/Desktop/study/CyberCesco/projects/cyber_cesco/pybo/cat_dog_model.h5')
+model = load_model(r'C:/Users/xssds/OneDrive/Desktop/Study/CyberCesco/projects/cyber_cesco/pybo/cat_dog_model.h5')
+
 
 def process_video(byte_data):
-    # 가상의 파일 객체 생성
-    video_file = BytesIO(byte_data)
 
+    # BytesIO 객체를 사용하여 비디오 byte 배열을 로컬 파일로 저장
+    video_stream = BytesIO(byte_data)
+    with open('video_temp.mp4', 'wb') as f:
+        f.write(video_stream.getvalue())
+
+    # 로컬 파일을 사용하여 비디오 객체 생성
+    video = cv2.VideoCapture('video_temp.mp4')
+
+    # 비디오가 열렸는지 확인
+    if not video.isOpened():
+        return None
+
+    # 프레임 배열 초기화
     frames = []
+
+    # 프레임 단위로 이미지 처리
     while True:
-        image_data = video_file.read(1024)  # 적절한 버퍼 크기로 읽기
-        if not image_data:
+        ret, frame = video.read()
+        if not ret:
             break
 
-        # NumPy 배열로 변환
-        nparr = np.frombuffer(image_data, np.uint8)
+        if (int(video.get(1)) % 10 == 0):
+            # 이미지 배열로 변환하여 리스트에 추가
+            frames.append(frame)
 
-        # OpenCV의 이미지로 디코딩
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        frames.append(frame)
-
-    # 가상의 파일 객체를 닫습니다.
-    video_file.close()
+    # 비디오 객체 해제
+    video.release()
 
     return frames
+
 
 def classify_frames(frames):
     classifications = []
@@ -56,8 +68,10 @@ def classify_frames(frames):
         # 분류 결과 저장
         if predicted_class == 0:
             classifications.append({"frame_index": idx, "class": "cat"})
+            print("frame_index : %s cat", idx)
         elif predicted_class == 1:
             classifications.append({"frame_index": idx, "class": "dog"})
+            print("frame_index : %s dog", idx)
         else:
             continue
 
@@ -67,13 +81,12 @@ def classify_frames(frames):
 def temp_data_check(byte_data, auth):
     print("비동기 작동중......")
 
-    #가상의 파일 객체 생성.
+    # 가상의 파일 객체 생성.
     video_frames = process_video(byte_data)
     classifications = classify_frames(video_frames)
     # spring으로 보내줄 JSON 더미 데이터, result_key 부분은 나중에 분 초나 몇번째 프레임인지
     # 이런 것으로 판별하거나, 이미지 등으로 대체할 예정.
     response = {"Auth": auth, "classifications": classifications}
-
 
     i = 10000
     while True:
@@ -97,12 +110,13 @@ def send_classification_results(json_data):
     else:
         print('Failed to send classification results to the event endpoint')
 
+
 @app.route('/upload', methods=['POST'])
 def check_file():
     # 업로드된 파일을 저장할 디렉토리 경로
     upload_directory = 'C:/Users/xssds/OneDrive/Desktop/Study/temp/'
 
-    #header의 token 정보 읽어오기
+    # header의 token 정보 읽어오기
     authorization_header = request.headers.get('Authorization')
 
     if authorization_header:
@@ -135,3 +149,25 @@ def check_file():
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
+
+# def process_video(byte_data):
+#     # 가상의 파일 객체 생성
+#     video_file = BytesIO(byte_data)
+#
+#     frames = []
+#     while True:
+#         image_data = video_file.read(1024)  # 적절한 버퍼 크기로 읽기
+#         if not image_data:
+#             break
+#
+#         # NumPy 배열로 변환
+#         nparr = np.frombuffer(image_data, np.uint8)
+#
+#         # OpenCV의 이미지로 디코딩
+#         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+#         frames.append(frame)
+#
+#     # 가상의 파일 객체를 닫습니다.
+#     video_file.close()
+#
+#     return frames
